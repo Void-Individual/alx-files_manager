@@ -48,7 +48,7 @@ class UsersController {
     // Check if the email exists
     const check = await findOne(dbClient, { email });
     if (check) {
-      res.status(400).send({ error: 'Already exists' });
+      res.status(400).send({ error: 'Already exist' });
       return;
     } if (check === false) {
       res.status(400).send({ error: 'An error occured' });
