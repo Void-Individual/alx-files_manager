@@ -1,27 +1,23 @@
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
 
-const waitConnection = (client) => {
-  return new Promise((resolve, reject) => {
-      let i = 0;
-      const repeatFct = async () => {
-          await setTimeout(() => {
-              i += 1;
-              if (i >= 10) {
-                  reject()
-              }
-              else if(!client.isAlive()) {
-                  console.log('Repeating isalive');
-                  repeatFct()
-              }
-              else {
-                  resolve()
-              }
-          }, 1000);
-      };
-      repeatFct();
-  })
-};
+const waitConnection = (client) => new Promise((resolve, reject) => {
+  let i = 0;
+  const repeatFct = async () => {
+    await setTimeout(() => {
+      i += 1;
+      if (i >= 10) {
+        reject();
+      } else if (!client.isAlive()) {
+        console.log('Repeating isalive');
+        repeatFct();
+      } else {
+        resolve();
+      }
+    }, 1000);
+  };
+  repeatFct();
+});
 
 class AppController {
   static async getStatus(req, res) {
@@ -34,8 +30,8 @@ class AppController {
     console.log('Is redis alive after waiting:', redisClient.isAlive());
 
     const isAlive = {
-      'redis': redisClient.isAlive(),
-      'db': dbClient.isAlive()
+      redis: redisClient.isAlive(),
+      db: dbClient.isAlive(),
     };
 
     res.status(200).send(isAlive);
@@ -46,7 +42,7 @@ class AppController {
     const files = await dbClient.nbFiles();
     const stats = {
       users, // Example data
-      files  // Example data
+      files, // Example data
     };
     res.status(200).send(stats);
   }

@@ -1,6 +1,7 @@
+import { v4 as uuidV4 } from 'uuid';
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
-import { v4 as uuidV4 } from 'uuid';
+
 const { ObjectId } = require('mongodb');
 
 const crypto = require('crypto');
@@ -25,7 +26,10 @@ async function findOne(client, query) {
   try {
     // If the passed query contains id, make it a mongo id object
     if (query._id) {
-      query._id = new ObjectId(query._id);
+      const newQuery = query;
+      newQuery._id = new ObjectId(query._id);
+      const data = await client.db.collection('users').findOne(newQuery);
+      return data;
     }
     // FInd the mongo document that matches the search query
     const data = await client.db.collection('users').findOne(query);
@@ -44,7 +48,7 @@ class AuthController {
       const header = req.header('Authorization');
       const [email, password] = decodeBase64(header);
 
-      const user = await findOne(dbClient, { email, password })
+      const user = await findOne(dbClient, { email, password });
       if (!user) {
         res.status(401).send({ error: 'Unauthorized' });
         return;
@@ -52,31 +56,30 @@ class AuthController {
 
       const token = uuidV4();
       console.log(user, token);
-      const key = 'auth_' + token;
+      const key = `auth_${token}`;
       // Set this key to be active for a duration of 24 hours
       await redisClient.set(key, user._id.toString(), 86400);
       res.send({ token });
     } catch (err) {
       console.log('There was an error:', err.message);
-      res.status(400).send({ error: 'Error during connection'});
+      res.status(400).send({ error: 'Error during connection' });
     }
   }
-
 
   static async getDisconnect(req, res) {
     try {
       const token = req.header('X-Token');
-      const _id = await redisClient.get('auth_' + token);
+      const _id = await redisClient.get(`auth_${token}`);
       const user = await findOne(dbClient, { _id });
       if (user) {
-        await redisClient.del('auth_' + token);
+        await redisClient.del(`auth_${token}`);
         res.status(204).send();
       } else {
-        res.status(401).send({ error: 'Unauthorized'});
+        res.status(401).send({ error: 'Unauthorized' });
       }
     } catch (err) {
       console.log('An error occured:', err.message);
-      res.status(400).send({ error: 'Error during disconnection' })
+      res.status(400).send({ error: 'Error during disconnection' });
     }
   }
 }

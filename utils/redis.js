@@ -2,7 +2,7 @@ import redis from 'redis';
 import { promisify } from 'util';
 
 class RedisClient {
-  constructor () {
+  constructor() {
     this.client = redis.createClient();
 
     this.connected = false; // Initialize to false
@@ -10,7 +10,6 @@ class RedisClient {
     this.client.on('connect', () => {
       console.log('Redis client connected');
       this.connected = true;
-      //console.log('Connected? :', this.connected)
     });
 
     this.client.on('error', (err) => {
@@ -26,7 +25,6 @@ class RedisClient {
 
   isAlive() {
     // Check if the client is connected
-    //console.log('Checking again: ', this.connected)
     return this.connected;
   }
 
@@ -37,19 +35,19 @@ class RedisClient {
     } catch (err) {
       console.error('Error getting value from Redis:', err.message);
     }
+    return null;
   }
 
   async set(key, value, time) {
     try {
       if (time) {
-        await this.setAsync(key, value, 'EX', time);  // Set with expiration time
+        await this.setAsync(key, value, 'EX', time); // Set with expiration time
       } else {
-        await this.setAsync(key, value);  // Set without expiration
+        await this.setAsync(key, value); // Set without expiration
       }
     } catch (err) {
       console.log('Error setting key:', err.message);
     }
-
   }
 
   async del(key) {
