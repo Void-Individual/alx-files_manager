@@ -57,7 +57,7 @@ class AuthController {
       const token = uuidV4();
       const key = `auth_${token}`;
       // Set this key to be active for a duration of 24 hours
-      await redisClient.set(key, user._id, 86400);
+      await redisClient.set(key, user._id.toString(), 86400);
       res.status(200).send({ token });
     } catch (err) {
       console.log('There was an error:', err.message);

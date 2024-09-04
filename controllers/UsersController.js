@@ -11,7 +11,7 @@ function hashSHA1(data) {
   return hash.digest('hex');
 }
 
-async function findOne(client, query) {
+async function findOneUser(client, query) {
   try {
     // If the passed query contains id, make it a mongo id object
     if (query._id) {
@@ -46,7 +46,7 @@ class UsersController {
     }
 
     // Check if the email exists
-    const check = await findOne(dbClient, { email });
+    const check = await findOneUser(dbClient, { email });
     if (check) {
       res.status(400).send({ error: 'Already exist' });
       return;
@@ -75,7 +75,7 @@ class UserController {
     try {
       const token = req.header('X-Token');
       const _id = await redisClient.get(`auth_${token}`);
-      const user = await findOne(dbClient, { _id });
+      const user = await findOneUser(dbClient, { _id });
       if (user) {
         const { email } = user;
         res.status(200).send({ id: _id, email });
