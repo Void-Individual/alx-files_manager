@@ -22,7 +22,7 @@ function decodeBase64(base64Data) {
   return [email, password];
 }
 
-async function findOne(client, query) {
+async function findOneUser(client, query) {
   try {
     // If the passed query contains id, make it a mongo id object
     if (query._id) {
@@ -48,18 +48,17 @@ class AuthController {
       const header = req.header('Authorization');
       const [email, password] = decodeBase64(header);
 
-      const user = await findOne(dbClient, { email, password });
+      const user = await findOneUser(dbClient, { email, password });
       if (!user) {
         res.status(401).send({ error: 'Unauthorized' });
         return;
       }
 
       const token = uuidV4();
-      console.log(user, token);
       const key = `auth_${token}`;
       // Set this key to be active for a duration of 24 hours
-      await redisClient.set(key, user._id.toString(), 86400);
-      res.send({ token });
+      await redisClient.set(key, user._id, 86400);
+      res.status(200).send({ token });
     } catch (err) {
       console.log('There was an error:', err.message);
       res.status(400).send({ error: 'Error during connection' });
@@ -70,7 +69,7 @@ class AuthController {
     try {
       const token = req.header('X-Token');
       const _id = await redisClient.get(`auth_${token}`);
-      const user = await findOne(dbClient, { _id });
+      const user = await findOneUser(dbClient, { _id });
       if (user) {
         await redisClient.del(`auth_${token}`);
         res.status(204).send();
@@ -79,7 +78,7 @@ class AuthController {
       }
     } catch (err) {
       console.log('An error occured:', err.message);
-      res.status(400).send({ error: 'Error during disconnection' });
+      res.status(500).send({ error: 'Error during disconnection' });
     }
   }
 }
