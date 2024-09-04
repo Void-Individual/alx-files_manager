@@ -8,15 +8,13 @@ const { ObjectId } = require('mongodb');
 
 async function findOneUser(client, query) {
   try {
+    const newQuery = query;
     // If the passed query contains id, make it a mongo id object
     if (query._id) {
-      const newQuery = query;
       newQuery._id = new ObjectId(query._id);
-      const data = await client.db.collection('users').findOne(newQuery);
-      return data;
     }
     // FInd the mongo document that matches the search query
-    const data = await client.db.collection('users').findOne(query);
+    const data = await client.db.collection('users').findOne(newQuery);
     // If it is found, it wil be returned, else return null
     return data;
   } catch (err) {
@@ -28,15 +26,43 @@ async function findOneUser(client, query) {
 
 async function findOneFile(client, query) {
   try {
+    const newQuery = query;
     // If the passed query contains id, make it a mongo id object
     if (query._id) {
-      const newQuery = query;
       newQuery._id = new ObjectId(query._id);
-      const data = await client.db.collection('files').findOne(newQuery);
-      return data;
     }
     // FInd the mongo document that matches the search query
-    const data = await client.db.collection('files').findOne(query);
+    const data = await client.db.collection('files').findOne(newQuery);
+    // If it is found, it wil be returned, else return null
+    return data;
+  } catch (err) {
+    console.log('Error finding data:', err.message);
+    // If there is an error, return false instead of null
+    return false;
+  }
+}
+
+async function findAllFiles(client, query, page) {
+  try {
+    const newQuery = query;
+    // If the passed query contains id, make it a mongo id object
+    if (query._id) {
+      newQuery._id = new ObjectId(query._id);
+    }
+
+    // Create a pipeline to paass through the aggregate call
+    const pipeline = [
+      // Include the search query in this prompt
+      { $match: newQuery },
+      // Skip the documents from the previous pages
+      { $skip: page * 20 },
+      // Set a limit to the number of files per page
+      { $limit: 20 },
+    ];
+
+    // FInd the mongo documents that match the search query
+    const data = await client.db.collection('files').aggregate(pipeline).toArray();
+
     // If it is found, it wil be returned, else return null
     return data;
   } catch (err) {
@@ -69,7 +95,7 @@ async function createNewFolder(client, fileData) {
     return folder.ops[0]; // This will return the created folder document
   } catch (err) {
     console.log('Error creating new folder', err.message);
-    return null
+    return null;
   }
 }
 
@@ -84,8 +110,10 @@ class FilesController {
         res.status(401).send({ error: 'Unauthorized' });
         return;
       }
-      const acceptedTypes = [ 'folder', 'file', 'image' ];
-      const {name, type, parentId, isPublic, data} = req.body;
+      const acceptedTypes = ['folder', 'file', 'image'];
+      const {
+        name, type, parentId, isPublic, data,
+      } = req.body;
 
       if (!name) {
         res.status(400).send({ error: 'Missing name' });
@@ -93,25 +121,25 @@ class FilesController {
       }
 
       if (!acceptedTypes.includes(type)) {
-        res.status(400).send({ error: 'Missing type'});
+        res.status(400).send({ error: 'Missing type' });
         return;
       }
 
       if (!data && type !== 'folder') {
-        res.status(400).send({ error: 'Missing data'});
+        res.status(400).send({ error: 'Missing data' });
         return;
       }
 
       let openFolder = '';
       if (parentId) {
-        openFolder = await findOneFile(dbClient, { _id: parentId});
+        openFolder = await findOneFile(dbClient, { _id: parentId });
         if (!openFolder) {
-          res.status(400).send({ error: 'Parent not found'});
+          res.status(400).send({ error: 'Parent not found' });
           return;
         }
 
         if (openFolder.type !== 'folder') {
-          res.status(400).send({ error: 'Parent is not a folder'});
+          res.status(400).send({ error: 'Parent is not a folder' });
           return;
         }
       }
@@ -122,7 +150,7 @@ class FilesController {
           name,
           type,
           isPublic: isPublic || false,
-          parentId: parentId || 0
+          parentId: parentId || 0,
         });
         newFolder.id = newFolder._id;
         delete newFolder._id;
@@ -142,7 +170,7 @@ class FilesController {
         type,
         isPublic: isPublic || false,
         parentId: parentId || 0,
-        localPath: filePath
+        localPath: filePath,
       };
 
       const newFile = await dbClient.db.collection('files').insertOne(saveData);
@@ -153,8 +181,110 @@ class FilesController {
         type,
         isPublic: isPublic || false,
         parentId: parentId || 0,
-      }
+      };
       res.status(201).send(endPointData);
+    } catch (err) {
+      console.log('An error occured:', err.message);
+      res.status(400).send({ error: 'Error during upload' });
+    }
+  }
+
+  static async getShow(req, res) {
+    try {
+      console.log('Running getShow');
+      const token = req.header('X-Token');
+      const _id = await redisClient.get(`auth_${token}`);
+      const user = await findOneUser(dbClient, { _id });
+
+      if (!user) {
+        res.status(401).send({ error: 'Unauthorized' });
+        return;
+      }
+
+      const fileId = req.params.id;
+      const file = await findOneFile(dbClient, { userId: _id, _id: fileId });
+      if (file) {
+        res.send(file);
+      } else {
+        res.status(404).send({ error: 'Not found' });
+      }
+    } catch (err) {
+      console.log('An error occured:', err.message);
+      res.status(400).send({ error: 'Error during upload' });
+    }
+  }
+
+  static async getIndex(req, res) {
+    console.log('Running index');
+    try {
+      const token = req.header('X-Token');
+      const _id = await redisClient.get(`auth_${token}`);
+      const user = await findOneUser(dbClient, { _id });
+
+      if (!user) {
+        res.status(401).send({ error: 'Unauthorized' });
+        return;
+      }
+
+      const parentId = req.query.parentId || 0;
+      const page = req.query.page || 0;
+
+      const parentFiles = await findAllFiles(dbClient, { parentId }, page);
+      if (!parentFiles) {
+        res.send([]);
+        return;
+      }
+      res.send(parentFiles);
+    } catch (err) {
+      console.log('An error occured:', err.message);
+      res.status(400).send({ error: 'Error during upload' });
+    }
+  }
+
+  static async putPublish(req, res) {
+    try {
+      console.log('Running getShow');
+      const token = req.header('X-Token');
+      const _id = await redisClient.get(`auth_${token}`);
+      const user = await findOneUser(dbClient, { _id });
+
+      if (!user) {
+        res.status(401).send({ error: 'Unauthorized' });
+        return;
+      }
+
+      const fileId = req.params.id;
+      const file = await findOneFile(dbClient, { userId: _id, _id: fileId });
+      if (file) {
+        res.send(file);
+      } else {
+        res.status(404).send({ error: 'Not found' });
+      }
+    } catch (err) {
+      console.log('An error occured:', err.message);
+      res.status(400).send({ error: 'Error during upload' });
+    }
+  }
+
+  static async putUnpublish(req, res) {
+    try {
+      console.log('Running getShow');
+      const token = req.header('X-Token');
+      const _id = await redisClient.get(`auth_${token}`);
+      const user = await findOneUser(dbClient, { _id });
+
+      if (!user) {
+        res.status(401).send({ error: 'Unauthorized' });
+        return;
+      }
+
+      const fileId = req.params.id;
+      const file = await findOneFile(dbClient, { userId: _id, _id: fileId });
+      if (file) {
+        res.send(file);
+      } else {
+        res.status(404).send({ error: 'Not found' });
+      }
     } catch (err) {
       console.log('An error occured:', err.message);
       res.status(400).send({ error: 'Error during upload' });

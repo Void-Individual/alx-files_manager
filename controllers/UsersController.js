@@ -13,15 +13,13 @@ function hashSHA1(data) {
 
 async function findOneUser(client, query) {
   try {
+    const newQuery = query;
     // If the passed query contains id, make it a mongo id object
     if (query._id) {
-      const newQuery = query;
       newQuery._id = new ObjectId(query._id);
-      const data = await client.db.collection('users').findOne(newQuery);
-      return data;
     }
     // FInd the mongo document that matches the search query
-    const data = await client.db.collection('users').findOne(query);
+    const data = await client.db.collection('users').findOne(newQuery);
     // If it is found, it wil be returned, else return null
     return data;
   } catch (err) {
