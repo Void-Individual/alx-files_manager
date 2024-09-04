@@ -204,6 +204,8 @@ class FilesController {
       const fileId = req.params.id;
       const file = await findOneFile(dbClient, { userId: _id, _id: fileId });
       if (file) {
+        file.id = file._id;
+        delete file._id;
         res.send(file);
       } else {
         res.status(404).send({ error: 'Not found' });
@@ -230,11 +232,17 @@ class FilesController {
       const page = req.query.page || 0;
 
       const parentFiles = await findAllFiles(dbClient, { parentId }, page);
-      if (!parentFiles) {
+      if (parentFiles) {
+        const fixedFiles = [];
+        for (const files of parentFiles) {
+          files.id = files._id;
+          delete files._id;
+          fixedFiles.push(files);
+        }
+        res.send(fixedFiles);
+      } else {
         res.send([]);
-        return;
       }
-      res.send(parentFiles);
     } catch (err) {
       console.log('An error occured:', err.message);
       res.status(400).send({ error: 'Error during upload' });
